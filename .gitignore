@@ -1,4 +1,4 @@
 env
 data
-*data-csv
+*npy-data
 **/__pycache__
