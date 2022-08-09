@@ -103,18 +103,6 @@ class DogBreedModel:
 
         print(tc.colored("Dataset & labels loaded.", "green"))
 
-    def preprocessDataset(self):
-        """
-        Feature extraction for trainX and testX.
-
-        Call this after `self.initClassifier()`
-        """
-        # f = lambda x: self.classifier["model"].predict(np.array(x))
-        # self.trainX = f(self.trainX)
-        # self.testX = f(self.testX)
-
-        print(tc.colored("Feature extraction complete.", "green"))
-
     def imgToNp(self, fileName):
         """
         Reads a given image, resize it, and converts it to a numpy array
@@ -148,7 +136,6 @@ class DogBreedModel:
         print(tc.colored("Model compiled.", "green"))
 
     def trainModel(self):
-        self.preprocessDataset()
         self.model.fit(self.trainX, self.trainY)
 
     def loadModel(self, path = "model"):
