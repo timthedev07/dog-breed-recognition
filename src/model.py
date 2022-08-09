@@ -94,7 +94,7 @@ class DogBreedModel:
         self.trainY = allY[:splitPoint]
         self.testY = allY[splitPoint:]
 
-        labelBreed = lambda breed: self.labels[breed]
+        labelBreed = lambda yData: np.array(list(map(lambda a: self.labels[a], yData)))
 
         numLabels = len(self.labels)
         # one hot encoding for y values for matching shapes
