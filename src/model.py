@@ -1,4 +1,3 @@
-from typing import Literal
 import pandas as pd
 from PIL import Image
 import numpy as np
@@ -13,16 +12,34 @@ import termcolor as tc
 pathJoin = os.path.join
 
 DATA_DIR = "data"
+IMG_DIR = "images"
 
 class DogBreedModel:
-    def __init__(self) -> None:
+    def __init__(self, trainPercentage = 80) -> None:
+        """
+        Params:
+          - `trainPercentage`% indicates how much of the given data should be used for training
+        """
+        self.trainPercentage = trainPercentage
+
         # this maps a breed to a number
         self.labels = {}
         self.model: SequentialType = None
         self.IMG_WIDTH = 128
         self.IMG_HEIGHT = 128
 
+        self.labelsData = pd.DataFrame()
+
+        # train/test data
+        self.trainX = []
+        self.trainY = []
+        self.testX = []
+        self.testY = []
+
         self.populateLabels()
+
+        # loading
+        self.loadDataset()
 
     def populateLabels(self):
         labelsInfo = pd.read_csv(pathJoin(DATA_DIR, "labels.csv"))
@@ -35,21 +52,33 @@ class DogBreedModel:
             self.labels[breeds[i]] = i + 1
         print(tc.colored("Labels populated.", "green"))
 
-    def loadDataset(self, train = False):
-        ds = "train" if train else "test"
-
-        dirContent = os.listdir(pathJoin(DATA_DIR, ds))
+    def loadDataset(self):
+        labelsInfo = pd.read_csv(pathJoin(DATA_DIR, "labels.csv"))
+        dirContent = os.listdir(pathJoin(DATA_DIR, IMG_DIR))
+        n = len(dirContent)
+        dirContent.sort()
 
         allImages = []
 
         for fName in tqdm(dirContent):
-            allImages.append(self.imgToNp(fName, ds))
+            allImages.append(self.imgToNp(fName))
 
-        allImages = np.array(allImages, dtype=object)
+        allImages = np.array(allImages)
 
-    def imgToNp(self, fileName, dataSource: Literal["train", "test"]):
-        img = Image.open(pathJoin(DATA_DIR, dataSource, fileName))
-        img.resize((self.IMG_WIDTH, self.IMG_HEIGHT))
+        splitPoint = int(n * self.trainPercentage / 100)
+
+        self.trainX = allImages[:splitPoint]
+        self.testX = allImages[splitPoint:]
+
+        allY = labelsInfo["breed"].to_numpy()
+        self.trainY = allY[:splitPoint]
+        self.testY = allY[splitPoint:]
+
+        print(tc.colored("Dataset & labels loaded.", "green"))
+
+    def imgToNp(self, fileName):
+        img = Image.open(pathJoin(DATA_DIR, IMG_DIR, fileName))
+        img = img.resize((self.IMG_WIDTH, self.IMG_HEIGHT))
         npArr = np.asarray(img)
         return npArr
 
@@ -59,7 +88,7 @@ class DogBreedModel:
         """
         self.model = Sequential([
             Conv2D(32, (3, 3), activation='relu',
-                               kernel_initializer='he_uniform', input_shape=(IMG_WIDTH, IMG_HEIGHT, 1)),
+                               kernel_initializer='he_uniform', input_shape=(self.IMG_WIDTH, self.IMG_HEIGHT, 1)),
             MaxPooling2D(pool_size=(2, 2)),
             Flatten(),
             Dense(100, activation="relu",
@@ -97,9 +126,9 @@ class DogBreedModel:
         raise Exception("Unknown prediction.")
 
 
-def main():
-    model = DogBreedModel()
+# def main():
+model = DogBreedModel()
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
