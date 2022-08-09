@@ -1,3 +1,4 @@
+from typing import Literal
 import pandas as pd
 from PIL import Image
 import numpy as np
@@ -33,6 +34,24 @@ class DogBreedModel:
         for i in range(n):
             self.labels[breeds[i]] = i + 1
         print(tc.colored("Labels populated.", "green"))
+
+    def loadDataset(self, train = False):
+        ds = "train" if train else "test"
+
+        dirContent = os.listdir(pathJoin(DATA_DIR, ds))
+
+        allImages = []
+
+        for fName in tqdm(dirContent):
+            allImages.append(self.imgToNp(fName, ds))
+
+        allImages = np.array(allImages, dtype=object)
+
+    def imgToNp(self, fileName, dataSource: Literal["train", "test"]):
+        img = Image.open(pathJoin(DATA_DIR, dataSource, fileName))
+        img.resize((self.IMG_WIDTH, self.IMG_HEIGHT))
+        npArr = np.asarray(img)
+        return npArr
 
     def initModel(self):
         """
