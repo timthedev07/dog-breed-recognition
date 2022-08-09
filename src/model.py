@@ -116,6 +116,9 @@ class DogBreedModel:
         print(tc.colored("Feature extraction complete.", "green"))
 
     def imgToNp(self, fileName):
+        """
+        Reads a given image, resize it, and converts it to a numpy array
+        """
         img = Image.open(pathJoin(DATA_DIR, IMG_DIR, fileName))
         img = img.resize((self.RESIZED_IMG_WIDTH, self.RESIZED_IMG_HEIGHT))
         npArr = np.asarray(img)
@@ -133,8 +136,6 @@ class DogBreedModel:
             # Flatten(),
             Dense(64, activation="relu", kernel_initializer="he_uniform"),
             Dropout(0.45),
-            Dense(32, activation="relu", kernel_initializer="he_uniform"),
-            Dropout(0.3),
             Dense(len(self.labels), activation="softmax")
         ])
 
@@ -169,11 +170,12 @@ class DogBreedModel:
         print(tc.colored("Model saved.", "green"))
 
     def predict(self, image: np.ndarray) -> str:
-        x = self.classifier["preprocessInput"](image)
-        [[outputLabelNum]] = self.model.predict([image])
-        for key, val in self.labels.values():
-            if val == outputLabelNum:
-                return key
+        [prediction] = self.model.predict([image])
+
+        print(prediction)
+        # for key, val in self.labels.values():
+        #     if val == outputLabelNum:
+        #         return key
 
         raise Exception("Unknown prediction.")
 
