@@ -94,10 +94,12 @@ class DogBreedModel:
         self.trainY = allY[:splitPoint]
         self.testY = allY[splitPoint:]
 
+        labelBreed = lambda breed: self.labels[breed]
+
         numLabels = len(self.labels)
         # one hot encoding for y values for matching shapes
-        self.trainY, self.testY = (tf.one_hot(self.trainY, numLabels),
-                     tf.one_hot(self.testY, numLabels))
+        self.trainY, self.testY = (tf.one_hot(labelBreed(self.trainY), numLabels),
+                     tf.one_hot(labelBreed(self.testY), numLabels))
 
         print(tc.colored("Dataset & labels loaded.", "green"))
 
