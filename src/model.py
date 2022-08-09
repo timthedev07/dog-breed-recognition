@@ -3,8 +3,9 @@ from PIL import Image
 import numpy as np
 import os
 import tensorflow as tf
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
 from tensorflow.keras.models import Sequential
+from classification_models.tfkeras import Classifiers
 from tensorflow.python.keras.models import Sequential as SequentialType
 from tqdm import tqdm
 import termcolor as tc
@@ -25,8 +26,8 @@ class DogBreedModel:
         # this maps a breed to a number
         self.labels = {}
         self.model: SequentialType = None
-        self.IMG_WIDTH = 128
-        self.IMG_HEIGHT = 128
+        self.RESIZED_IMG_WIDTH = 256
+        self.RESIZED_IMG_HEIGHT = 256
 
         self.labelsData = pd.DataFrame()
 
@@ -36,10 +37,28 @@ class DogBreedModel:
         self.testX = []
         self.testY = []
 
-        self.populateLabels()
+        # storing the classifier
+        self.classifier = {
+            "model": None,
+            "preprocessInput": None,
+        }
 
-        # loading
+        self.initClassifier()
+        self.populateLabels()
         self.loadDataset()
+        self.initModel()
+
+    def initClassifier(self):
+        """
+        Initializing the pre-trained resnet 34 model.
+
+        Call this before other initialization methods.
+        """
+        ResNet34, preprocess_input = Classifiers.get('resnet34')
+        self.classifier["model"] = ResNet34((self.RESIZED_IMG_WIDTH, self.RESIZED_IMG_WIDTH, 3), weights='imagenet')
+        self.classifier["preprocessInput"] = preprocess_input
+
+        print(tc.colored("Classifier model initialized.", "green"))
 
     def populateLabels(self):
         labelsInfo = pd.read_csv(pathJoin(DATA_DIR, "labels.csv"))
@@ -50,17 +69,18 @@ class DogBreedModel:
 
         for i in range(n):
             self.labels[breeds[i]] = i + 1
+
         print(tc.colored("Labels populated.", "green"))
 
     def loadDataset(self):
         labelsInfo = pd.read_csv(pathJoin(DATA_DIR, "labels.csv"))
         dirContent = os.listdir(pathJoin(DATA_DIR, IMG_DIR))
-        n = len(dirContent)
+        n = 100 # len(dirContent)
         dirContent.sort()
 
         allImages = []
 
-        for fName in tqdm(dirContent):
+        for fName in tqdm(dirContent[:n]):
             allImages.append(self.imgToNp(fName))
 
         allImages = np.array(allImages)
@@ -70,15 +90,32 @@ class DogBreedModel:
         self.trainX = allImages[:splitPoint]
         self.testX = allImages[splitPoint:]
 
-        allY = labelsInfo["breed"].to_numpy()
+        allY = labelsInfo["breed"].to_numpy()[:n]
         self.trainY = allY[:splitPoint]
         self.testY = allY[splitPoint:]
 
+        numLabels = len(self.labels)
+        # one hot encoding for y values for matching shapes
+        self.trainY, self.testY = (tf.one_hot(self.trainY, numLabels),
+                     tf.one_hot(self.testY, numLabels))
+
         print(tc.colored("Dataset & labels loaded.", "green"))
+
+    def preprocessDataset(self):
+        """
+        Feature extraction for trainX and testX.
+
+        Call this after `self.initClassifier()`
+        """
+        # f = lambda x: self.classifier["model"].predict(np.array(x))
+        # self.trainX = f(self.trainX)
+        # self.testX = f(self.testX)
+
+        print(tc.colored("Feature extraction complete.", "green"))
 
     def imgToNp(self, fileName):
         img = Image.open(pathJoin(DATA_DIR, IMG_DIR, fileName))
-        img = img.resize((self.IMG_WIDTH, self.IMG_HEIGHT))
+        img = img.resize((self.RESIZED_IMG_WIDTH, self.RESIZED_IMG_HEIGHT))
         npArr = np.asarray(img)
         return npArr
 
@@ -87,17 +124,29 @@ class DogBreedModel:
         Initialized an untrained model defined with an architecture
         """
         self.model = Sequential([
-            Conv2D(32, (3, 3), activation='relu',
-                               kernel_initializer='he_uniform', input_shape=(self.IMG_WIDTH, self.IMG_HEIGHT, 1)),
-            MaxPooling2D(pool_size=(2, 2)),
-            Flatten(),
-            Dense(100, activation="relu",
-                                kernel_initializer="he_uniform"),
+            self.classifier["model"],
+            # Conv2D(32, (3, 3), activation='relu',
+            #                    kernel_initializer='he_uniform', input_shape=(self.RESIZED_IMG_WIDTH, self.RESIZED_IMG_HEIGHT, 1)),
+            # MaxPooling2D(pool_size=(2, 2)),
+            # Flatten(),
+            Dense(64, activation="relu", kernel_initializer="he_uniform"),
+            Dropout(0.45),
+            Dense(32, activation="relu", kernel_initializer="he_uniform"),
+            Dropout(0.3),
             Dense(len(self.labels), activation="softmax")
         ])
 
+        self.model.compile(
+            optimizer="SGD",
+            loss="categorical_crossentropy",
+            metrics=["accuracy"]
+        )
+
+        print(tc.colored("Model compiled.", "green"))
+
     def trainModel(self):
-        pass
+        self.preprocessDataset()
+        self.model.fit(self.trainX, self.trainY)
 
     def loadModel(self, path = "model"):
         """
@@ -118,6 +167,7 @@ class DogBreedModel:
         print(tc.colored("Model saved.", "green"))
 
     def predict(self, image: np.ndarray) -> str:
+        x = self.classifier["preprocessInput"](image)
         [[outputLabelNum]] = self.model.predict([image])
         for key, val in self.labels.values():
             if val == outputLabelNum:
@@ -128,7 +178,6 @@ class DogBreedModel:
 
 # def main():
 model = DogBreedModel()
-
 
 # if __name__ == "__main__":
 #     main()
