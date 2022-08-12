@@ -137,7 +137,9 @@ class DogBreedModel:
             self.classifier,
             BatchNormalization(),
             GlobalAveragePooling2D(),
-            Dropout(0.3),
+            Dropout(0.45),
+            Dense(128),
+            Dropout(0.45),
             Dense(len(self.labels), activation="softmax")
         ])
 
@@ -150,13 +152,6 @@ class DogBreedModel:
         print(tc.colored("Model compiled.", "green"))
 
     def trainModel(self):
-        callback = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss',
-            patience=2,
-            baseline=None,
-            restore_best_weights=True
-        )
-
         print(tc.colored("Creating data batches for training...", "yellow"))
         trainData = self.createDataBatches(self.trainX, self.trainY)
         validationData = self.createDataBatches(self.testX, self.testY, validation=True)
@@ -165,8 +160,9 @@ class DogBreedModel:
         self.model.fit(
             trainData,
             steps_per_epoch = len(trainData),
-            epochs = 10,
-            callbacks = [callback],
+            epochs = 15,
+            validation_data = validationData,
+            validation_steps = len(validationData)
         )
         self.model.evaluate(validationData)
         self.saveModel()
