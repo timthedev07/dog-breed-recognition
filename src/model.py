@@ -1,14 +1,14 @@
 import pandas as pd
-from PIL import Image
 import numpy as np
 import os
 import tensorflow as tf
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout, BatchNormalization
 from tensorflow.keras.models import Sequential
-from classification_models.tfkeras import Classifiers
 from tensorflow.python.keras.models import Sequential as SequentialType
-from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 import termcolor as tc
+
+csvFname = "labels.csv"
 
 pathJoin = os.path.join
 
@@ -16,18 +16,20 @@ DATA_DIR = "data"
 IMG_DIR = "images"
 
 class DogBreedModel:
-    def __init__(self, trainPercentage = 80) -> None:
+    def __init__(self, trainPercentage = 80, production = False, dataSize = None) -> None:
         """
         Params:
-          - `trainPercentage`% indicates how much of the given data should be used for training
+          - `trainPercentage`% indicates how much of the given data should be used for **training**
+          - `dataSize` indicates how much of the downloaded data should be used, leave as None if all data should be involved
         """
         self.trainPercentage = trainPercentage
+        self.BATCH_SIZE = 32
+        self.dataSize = dataSize
 
-        # this maps a breed to a number
-        self.labels = {}
+        self.labels = []
         self.model: SequentialType = None
-        self.RESIZED_IMG_WIDTH = 256
-        self.RESIZED_IMG_HEIGHT = 256
+        self.RESIZED_IMG_WIDTH = 224
+        self.RESIZED_IMG_HEIGHT = 224
 
         self.labelsData = pd.DataFrame()
 
@@ -38,97 +40,109 @@ class DogBreedModel:
         self.testY = []
 
         # storing the classifier
-        self.classifier = {
-            "model": None,
-            "preprocessInput": None,
-        }
+        self.classifier: SequentialType = Sequential([])
 
-        self.initClassifier()
         self.populateLabels()
-        self.loadDataset()
-        self.initModel()
+        self.initClassifier()
+
+        if not production:
+            self.loadDataset()
+            self.initModel()
+        else:
+            self.loadModel()
+
+    def getImgLabelPair(self, fileName: str, label):
+        return self.imgToNp(fileName), label
+
+    def createDataBatches(self, X, y=None, validation = False):
+        if validation:
+            validationData = tf.data.Dataset.from_tensor_slices((tf.constant(X), tf.constant(y)))
+            return validationData.map(self.getImgLabelPair).batch(self.BATCH_SIZE)
+        else:
+            trainData = tf.data.Dataset.from_tensor_slices((tf.constant(X), tf.constant(y))).shuffle(len(X))
+            return trainData.map(self.getImgLabelPair).batch(self.BATCH_SIZE)
 
     def initClassifier(self):
         """
-        Initializing the pre-trained resnet 34 model.
+        Initializing the pre-trained resnet 50 v2 model.
 
         Call this before other initialization methods.
         """
-        ResNet34, preprocess_input = Classifiers.get('resnet34')
-        self.classifier["model"] = ResNet34((self.RESIZED_IMG_WIDTH, self.RESIZED_IMG_WIDTH, 3), weights='imagenet')
-        self.classifier["preprocessInput"] = preprocess_input
+        classifier = tf.keras.applications.mobilenet_v2.MobileNetV2(
+            input_shape=(self.RESIZED_IMG_WIDTH, self.RESIZED_IMG_HEIGHT, 3),
+            include_top = False,
+            weights='imagenet',
+            classes=len(self.labels)
+        )
+        for layer in classifier.layers:
+            layer.trainable = False
+
+        self.classifier = classifier
 
         print(tc.colored("Classifier model initialized.", "green"))
 
     def populateLabels(self):
-        labelsInfo = pd.read_csv(pathJoin(DATA_DIR, "labels.csv"))
+        labelsInfo = pd.read_csv(pathJoin(DATA_DIR, csvFname))
         breeds = labelsInfo["breed"].unique()
         breeds.sort()
 
-        n = len(breeds)
-
-        for i in range(n):
-            self.labels[breeds[i]] = i + 1
+        self.labels = breeds
 
         print(tc.colored("Labels populated.", "green"))
 
+    def yDataOneHot(self, y: np.ndarray):
+        """
+        y should be a 1-dimensional array containing the breeds as strings
+        """
+        return np.array([(label == self.labels).astype(int) for label in y])
+
+    def xNormalize(self, x: np.ndarray):
+        """
+        turns all pixel values in all images provided into a decimal in the range of [0, 1]
+        """
+        return tf.image.convert_image_dtype(x, tf.float32)
+
     def loadDataset(self):
-        labelsInfo = pd.read_csv(pathJoin(DATA_DIR, "labels.csv"))
-        dirContent = os.listdir(pathJoin(DATA_DIR, IMG_DIR))
-        n = 100 # len(dirContent)
-        dirContent.sort()
+        print(tc.colored("Loading dataset & labels...", "yellow"))
 
-        allImages = []
+        csvData = pd.read_csv(pathJoin(DATA_DIR, csvFname))
+        imgFilenames = csvData["id"]
+        n = self.dataSize if self.dataSize is not None else len(imgFilenames)
+        imgFilenames = imgFilenames[:n].map(lambda x: pathJoin(DATA_DIR, IMG_DIR, x + ".jpg"))
+        print(tc.colored("  Image file names loaded.", "green"))
 
-        for fName in tqdm(dirContent[:n]):
-            allImages.append(self.imgToNp(fName))
+        allY = self.yDataOneHot(csvData["breed"].to_numpy()[:n])
+        print(tc.colored("  Labels one-hot encoded.", "green"))
 
-        allImages = np.array(allImages)
-
-        splitPoint = int(n * self.trainPercentage / 100)
-
-        self.trainX = allImages[:splitPoint]
-        self.testX = allImages[splitPoint:]
-
-        allY = labelsInfo["breed"].to_numpy()[:n]
-        self.trainY = allY[:splitPoint]
-        self.testY = allY[splitPoint:]
-
-        labelBreed = lambda yData: np.array(list(map(lambda a: self.labels[a], yData)))
-
-        numLabels = len(self.labels)
-        # one hot encoding for y values for matching shapes
-        self.trainY, self.testY = (tf.one_hot(labelBreed(self.trainY), numLabels),
-                     tf.one_hot(labelBreed(self.testY), numLabels))
-
+        self.trainX, self.testX, self.trainY, self.testY = train_test_split(imgFilenames, allY, test_size=(1 - (self.trainPercentage / 100)), shuffle=False)
         print(tc.colored("Dataset & labels loaded.", "green"))
 
-    def imgToNp(self, fileName):
+    def imgToNp(self, fileName: tf.Tensor):
         """
-        Reads a given image, resize it, and converts it to a numpy array
+        Reads a given image, resize it, normalize it, and converts it to a tf tensor
+
+        The `fileName` param should be a string tensor
         """
-        img = Image.open(pathJoin(DATA_DIR, IMG_DIR, fileName))
-        img = img.resize((self.RESIZED_IMG_WIDTH, self.RESIZED_IMG_HEIGHT))
-        npArr = np.asarray(img)
-        return npArr
+        file = tf.io.read_file(fileName)
+        img = tf.io.decode_image(file, channels = 3)
+        img = tf.image.convert_image_dtype(img, tf.float32)
+        img = tf.image.resize_with_crop_or_pad(img, 224, 224)
+        return img
 
     def initModel(self):
         """
         Initialized an untrained model defined with an architecture
         """
         self.model = Sequential([
-            self.classifier["model"],
-            # Conv2D(32, (3, 3), activation='relu',
-            #                    kernel_initializer='he_uniform', input_shape=(self.RESIZED_IMG_WIDTH, self.RESIZED_IMG_HEIGHT, 1)),
-            # MaxPooling2D(pool_size=(2, 2)),
-            # Flatten(),
-            Dense(64, activation="relu", kernel_initializer="he_uniform"),
-            Dropout(0.45),
+            self.classifier,
+            BatchNormalization(),
+            GlobalAveragePooling2D(),
+            Dropout(0.3),
             Dense(len(self.labels), activation="softmax")
         ])
 
         self.model.compile(
-            optimizer="SGD",
+            optimizer=tf.keras.optimizers.Adam(),
             loss="categorical_crossentropy",
             metrics=["accuracy"]
         )
@@ -136,7 +150,26 @@ class DogBreedModel:
         print(tc.colored("Model compiled.", "green"))
 
     def trainModel(self):
-        self.model.fit(self.trainX, self.trainY)
+        callback = tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=2,
+            baseline=None,
+            restore_best_weights=True
+        )
+
+        print(tc.colored("Creating data batches for training...", "yellow"))
+        trainData = self.createDataBatches(self.trainX, self.trainY)
+        validationData = self.createDataBatches(self.testX, self.testY, validation=True)
+        print(tc.colored("Data batches created.", "green"))
+
+        self.model.fit(
+            trainData,
+            steps_per_epoch = len(trainData),
+            epochs = 10,
+            callbacks = [callback],
+        )
+        self.model.evaluate(validationData)
+        self.saveModel()
 
     def loadModel(self, path = "model"):
         """
@@ -164,11 +197,10 @@ class DogBreedModel:
         #     if val == outputLabelNum:
         #         return key
 
-        raise Exception("Unknown prediction.")
 
+def main():
+    model = DogBreedModel()
+    model.trainModel()
 
-# def main():
-model = DogBreedModel()
-
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()
