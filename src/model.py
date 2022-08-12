@@ -231,7 +231,7 @@ class DogBreedModel:
 
 def main():
     model = DogBreedModel(production=True, breedTxtFilePath="breeds.txt")
-    print(model.predictPicture("sample.jpeg"))
+    print(model.predictPicture("967711658389481_.pic.jpg"))
 
 if __name__ == "__main__":
     main()
