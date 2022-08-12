@@ -2,10 +2,11 @@ import pandas as pd
 import numpy as np
 import os
 import tensorflow as tf
-from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout, BatchNormalization
-from tensorflow.keras.models import Sequential
-from tensorflow.python.keras.models import Sequential as SequentialType
-from sklearn.model_selection import train_test_split
+if __name__ == "__main__":
+    from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout, BatchNormalization
+    from tensorflow.keras.models import Sequential
+    from tensorflow.python.keras.models import Sequential as SequentialType
+    from sklearn.model_selection import train_test_split
 import termcolor as tc
 
 csvFname = "labels.csv"
@@ -16,11 +17,12 @@ DATA_DIR = "data"
 IMG_DIR = "images"
 
 class DogBreedModel:
-    def __init__(self, trainPercentage = 80, production = False, dataSize = None) -> None:
+    def __init__(self, trainPercentage = 80, production = False, dataSize = None, breedTxtFilePath = None) -> None:
         """
         Params:
           - `trainPercentage`% indicates how much of the given data should be used for **training**
           - `dataSize` indicates how much of the downloaded data should be used, leave as None if all data should be involved
+          - `breedTxtFilePath`: the path to the text file containing the breed names(if any), leave as None if no such file is available
         """
         self.trainPercentage = trainPercentage
         self.BATCH_SIZE = 32
@@ -42,22 +44,40 @@ class DogBreedModel:
         # storing the classifier
         self.classifier: SequentialType = Sequential([])
 
-        self.populateLabels()
-        self.initClassifier()
+        self.populateLabels(breedTxtFilePath)
 
         if not production:
+            self.initClassifier()
             self.loadDataset()
             self.initModel()
         else:
             self.loadModel()
 
+    def exportLabels(self, path = "breeds.txt"):
+        if len(self.labels) < 1:
+            print(tc.colored("No labels found in model, export skipped.", "yellow"))
+
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(self.labels))
+
+        print(tc.colored(f"Labels saved to <{path}>", "green"))
+
+    def importLabels(self, path = "breeds.txt"):
+        with open(path, "r", encoding="utf-8") as f:
+            lines = [line.rstrip('\n') for line in f.readlines()]
+            self.labels = lines
+        print(tc.colored(f"Labels imported from <{path}>", "green"))
+
     def getImgLabelPair(self, fileName: str, label):
         return self.imgToNp(fileName), label
 
-    def createDataBatches(self, X, y=None, validation = False):
+    def createDataBatches(self, X, y=None, validation = False, pred = False):
         if validation:
             validationData = tf.data.Dataset.from_tensor_slices((tf.constant(X), tf.constant(y)))
             return validationData.map(self.getImgLabelPair).batch(self.BATCH_SIZE)
+        elif pred:
+            predData = tf.data.Dataset.from_tensor_slices(tf.constant(X))
+            return predData.map(self.imgToNp).batch(self.BATCH_SIZE)
         else:
             trainData = tf.data.Dataset.from_tensor_slices((tf.constant(X), tf.constant(y))).shuffle(len(X))
             return trainData.map(self.getImgLabelPair).batch(self.BATCH_SIZE)
@@ -81,7 +101,7 @@ class DogBreedModel:
 
         print(tc.colored("Classifier model initialized.", "green"))
 
-    def populateLabels(self):
+    def readLabelsFromCSV(self):
         labelsInfo = pd.read_csv(pathJoin(DATA_DIR, csvFname))
         breeds = labelsInfo["breed"].unique()
         breeds.sort()
@@ -89,6 +109,17 @@ class DogBreedModel:
         self.labels = breeds
 
         print(tc.colored("Labels populated.", "green"))
+
+    def populateLabels(self, txtPath = None):
+        """
+        Params:
+          - `txtPath`: the path to the text file containing the breed names(if any), leave as None if no such file is available
+        """
+        if txtPath and txtPath in os.listdir("."):
+            self.importLabels(txtPath)
+        else:
+            self.readLabelsFromCSV()
+            self.exportLabels()
 
     def yDataOneHot(self, y: np.ndarray):
         """
@@ -185,18 +216,22 @@ class DogBreedModel:
         self.model.save(path)
         print(tc.colored("Model saved.", "green"))
 
-    def predict(self, image: np.ndarray) -> str:
-        [prediction] = self.model.predict([image])
+    def predict(self, image):
+        [prediction] = self.model(np.array([image]))
 
-        print(prediction)
-        # for key, val in self.labels.values():
-        #     if val == outputLabelNum:
-        #         return key
+        res = prediction.numpy()
+        labelInd = np.where(res == np.amax(res))[0][0]
+        label: str = self.labels[labelInd]
+        return label.replace("_", " ").capitalize()
 
+
+    def predictPicture(self, path: str) -> str:
+        t = self.imgToNp(path)
+        return self.predict(t)
 
 def main():
-    model = DogBreedModel()
-    model.trainModel()
+    model = DogBreedModel(production=True, breedTxtFilePath="breeds.txt")
+    print(model.predictPicture("sample.jpeg"))
 
 if __name__ == "__main__":
     main()
