@@ -234,7 +234,7 @@ class DogBreedModel:
 
 
     def predictPicture(self, path: str) -> str:
-        t = self.imgToNp(path)
+        t = self.imgToNp(path, isWebp=path.endswith(".webp"))
         return self.predict(t)
 
 def main():
