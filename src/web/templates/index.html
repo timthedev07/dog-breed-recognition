@@ -27,7 +27,7 @@
           rgba(92, 92, 92, 0.5) 0%,
           rgba(136, 137, 138, 0.5) 100%
         );
-        position: absolute;
+        position: fixed;
       "
     >
       <div class="spinner-border text-light" role="status"></div>
@@ -96,21 +96,33 @@
           gap: 20px;
         "
       >
-        <img
+        <div
           style="
-            width: 90%;
-            height: 400px;
-            outline: none;
-            border-radius: 10px;
-            border: 2px solid #3f3f3f;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 7px;
           "
-          src="/static/ph.png"
-          id="output"
-        />
+        >
+          <img
+            style="
+              width: 90%;
+              height: 400px;
+              outline: none;
+              border-radius: 10px;
+              border: 2px solid #3f3f3f;
+            "
+            src="/static/ph.png"
+            id="output"
+          />
+          <span style="font-weight: bold" id="res">Breed: ?</span>
+        </div>
         <form
           method="post"
           class="form-outline form-white"
           enctype="multipart/form-data"
+          action="/"
+          id="pred-form"
           style="
             display: flex;
             flex-direction: column;
@@ -161,40 +173,45 @@
       };
 
       document.addEventListener("DOMContentLoaded", () => {
-        const element = document.getElementById("submit-button");
-        element.addEventListener("click", () => {
+        const element = document.getElementById("pred-form");
+        element.addEventListener("submit", (e) => {
+          e.preventDefault();
+
           const loader = document.getElementById("loading");
           loader.style.display = "flex";
 
-          const textNode = document.getElementById("ta");
-          const text = textNode.value;
+          let photo = document.getElementById("file-input").files[0];
+          if (!photo) {
+            loader.style.display = "none";
+            return;
+          }
+          let formData = new FormData();
+          formData.append("file", photo);
+
+          console.log(formData);
+
           const resElem = document.getElementById("res");
 
           fetch("/", {
-            method: "POST",
-            body: JSON.stringify({
-              text,
-            }),
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": photo.contentType,
             },
+            mode: "no-cors",
+            method: "POST",
+            files: photo,
+            body: formData,
           })
             .then(async (res) => {
               loader.style.display = "none";
+
               if (!res.ok) {
-                resElem.style.display = "none";
                 return;
               }
+
               const result = await res.json();
 
-              const { sentiment, value } = result;
-              resElem.style.display = "block";
-
-              document.getElementById("sentiment").innerHTML = sentiment;
-              document.getElementById("sentiment").style.color =
-                sentiment === "positive" ? "#22c55e" : "#ef4444";
-              document.getElementById("sent-val").innerHTML = String(value);
-              document.getElementById("sent-val").style.color = "#06b6d4";
+              const { breed } = result;
+              resElem.innerHTML = breed;
             })
             .catch((er) => {
               console.log(er);

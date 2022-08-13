@@ -1,6 +1,5 @@
-from curses import flash
-from src.model import DogBreedModel
-from flask import Flask, redirect, request, render_template
+from src.backend.model import DogBreedModel
+from flask import Flask, request, render_template
 from werkzeug.utils import secure_filename
 import tempfile
 import os
@@ -16,43 +15,49 @@ app = Flask(__name__)
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def uploadImg(method: str):
+def getTempFilePath(filename):
+    return os.path.join(UPLOAD_FOLDER, secure_filename(filename))
+
+def getImgUpload(method: str):
     if method == 'POST':
         # check if the post request has the file part
         if 'file' not in request.files:
-            flash('No image found')
-            return redirect(request.url)
+            return {
+                "message": "No image found"
+            }, 400
 
         file = request.files["file"]
         fname = file.filename
         if not fname or fname == "":
-            flash('No file selected')
-            return redirect(request.url)
+            return {
+                "message": "No file selected"
+            }, 400
 
         if file and allowed_file(fname):
-            securedFName = secure_filename(fname)
-            path = os.path.join(app.config['UPLOAD_FOLDER'], securedFName)
+            path = getTempFilePath(fname)
             file.save(path)
+            return path
         else:
-            flash('File extension not allowed.')
-            return redirect(request.url)
+            return {
+                "message": "File extension not allowed"
+            }, 400
 
 
 
 @app.route("/", methods=["GET", "POST"])
 def home():
     if request.method == "POST":
-        data = request.get_json()
+        imgRes = getImgUpload(request.method)
+        print(imgRes)
 
-        if not data["text"]:
-            return "Bad Request", 400
+        if type(imgRes) != str:
+            return imgRes
 
         model = DogBreedModel(production = True, breedTxtFilePath="breeds.txt")
-        res = model.predictPicture()
+        pred = model.predictPicture(imgRes)
 
         return {
-            "value": str(res),
-            "sentiment": "negative" if res < 0 else ("positive" if res > 0 else "neutral")
+            "breed": pred,
         }, 200
     else:
         return render_template("index.html")
