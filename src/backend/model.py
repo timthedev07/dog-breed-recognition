@@ -2,10 +2,10 @@ import pandas as pd
 import numpy as np
 import os
 import tensorflow as tf
+from tensorflow.python.keras.models import Sequential as SequentialType
 if __name__ == "__main__":
     from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout, BatchNormalization
     from tensorflow.keras.models import Sequential
-    from tensorflow.python.keras.models import Sequential as SequentialType
     from sklearn.model_selection import train_test_split
 import termcolor as tc
 
@@ -29,11 +29,11 @@ class DogBreedModel:
         self.dataSize = dataSize
 
         self.labels = []
-        self.model = None
+        self.model: SequentialType = None
         self.RESIZED_IMG_WIDTH = 224
         self.RESIZED_IMG_HEIGHT = 224
 
-        self.labelsData = None
+        self.labelsData = pd.DataFrame()
 
         # train/test data
         self.trainX = []
@@ -42,7 +42,7 @@ class DogBreedModel:
         self.testY = []
 
         # storing the classifier
-        self.classifier = None
+        self.classifier: SequentialType = Sequential([])
 
         self.populateLabels(breedTxtFilePath)
 
