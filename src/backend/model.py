@@ -33,7 +33,7 @@ class DogBreedModel:
         self.RESIZED_IMG_WIDTH = 224
         self.RESIZED_IMG_HEIGHT = 224
 
-        self.labelsData = pd.DataFrame()
+        self.labelsData = None
 
         # train/test data
         self.trainX = []
@@ -42,7 +42,7 @@ class DogBreedModel:
         self.testY = []
 
         # storing the classifier
-        self.classifier: SequentialType = Sequential([])
+        self.classifier = None
 
         self.populateLabels(breedTxtFilePath)
 
