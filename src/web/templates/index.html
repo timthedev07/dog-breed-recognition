@@ -93,6 +93,7 @@
           display: flex;
           flex-direction: column;
           align-items: center;
+          gap: 20px;
         "
       >
         <img
@@ -116,6 +117,15 @@
             gap: 40px;
             min-width: 300px;
             max-width: 550px;
+            background: rgb(31, 35, 41);
+            background: linear-gradient(
+              79deg,
+              rgba(31, 35, 41, 1) 0%,
+              rgba(33, 37, 41, 1) 100%
+            );
+            box-shadow: rgba(0, 0, 0, 0.101) 3px 3px 5px 5px;
+            padding: 20px;
+            border-radius: 7px;
           "
         >
           <div>
@@ -144,6 +154,10 @@
       const loadFile = (event) => {
         const imageNode = document.getElementById("output");
         imageNode.src = URL.createObjectURL(event.target.files[0]);
+        imageNode.style.width = "auto";
+        imageNode.style.height = "auto";
+        imageNode.style.maxWidth = "90%";
+        imageNode.style.maxHeight = "450px;";
       };
 
       document.addEventListener("DOMContentLoaded", () => {
