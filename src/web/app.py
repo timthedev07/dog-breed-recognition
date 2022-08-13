@@ -1,36 +1,45 @@
-from flask import Flask, render_template, request
-import tensorflow as tf
-from nltk.corpus import stopwords
-from tensorflow.python.keras import Sequential as ST
-import string
-import re
+from curses import flash
+from src.model import DogBreedModel
+from flask import Flask, redirect, request, render_template
+from werkzeug.utils import secure_filename
+import tempfile
+import os
 
-SAVED_MODEL_DIR = "model"
+UPLOAD_FOLDER = tempfile.gettempdir()
+ALLOWED_EXTENSIONS = set(["png", "jpg", "jpeg", "webp"])
+
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 app = Flask(__name__)
 
-@tf.function
-def custom_standardization(input_data):
-    stop_words = set(stopwords.words('english'))
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-    lowercase = tf.strings.lower(input_data)
-    stripped_html = tf.strings.regex_replace(lowercase, "<br />", " ")
-    stripped_html = tf.strings.regex_replace(stripped_html,r'\d+(?:\.\d*)?(?:[eE][+-]?\d+)?', ' ')
-    stripped_html = tf.strings.regex_replace(stripped_html, r'@([A-Za-z0-9_]+)', ' ' )
-    for i in stop_words:
-        stripped_html = tf.strings.regex_replace(stripped_html, f' {i} ', " ")
-    return tf.strings.regex_replace(
-        stripped_html, "[%s]" % re.escape(string.punctuation), ""
-    )
+def uploadImg(method: str):
+    if method == 'POST':
+        # check if the post request has the file part
+        if 'file' not in request.files:
+            flash('No image found')
+            return redirect(request.url)
 
-def loadModel() -> ST:
-    custom_objects = {"custom_standardization": custom_standardization}
-    with tf.keras.utils.custom_object_scope(custom_objects):
-        loaded = tf.keras.models.load_model(SAVED_MODEL_DIR)
-        return loaded
+        file = request.files["file"]
+        fname = file.filename
+        if not fname or fname == "":
+            flash('No file selected')
+            return redirect(request.url)
+
+        if file and allowed_file(fname):
+            securedFName = secure_filename(fname)
+            path = os.path.join(app.config['UPLOAD_FOLDER'], securedFName)
+            file.save(path)
+        else:
+            flash('File extension not allowed.')
+            return redirect(request.url)
 
 
-@app.route("/", methods = ["POST", "GET"])
+
+@app.route("/", methods=["GET", "POST"])
 def home():
     if request.method == "POST":
         data = request.get_json()
@@ -38,8 +47,8 @@ def home():
         if not data["text"]:
             return "Bad Request", 400
 
-        model = loadModel()
-        [[res]] = model.predict([data["text"]])
+        model = DogBreedModel(production = True, breedTxtFilePath="breeds.txt")
+        res = model.predictPicture()
 
         return {
             "value": str(res),
@@ -47,6 +56,5 @@ def home():
         }, 200
     else:
         return render_template("index.html")
-
-if __name__ == '__main__':
-    app.run()
+if __name__ == "__main__":
+    app.run(debug=True)
