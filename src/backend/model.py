@@ -29,7 +29,7 @@ class DogBreedModel:
         self.dataSize = dataSize
 
         self.labels = []
-        self.model: SequentialType = None
+        self.model = None
         self.RESIZED_IMG_WIDTH = 224
         self.RESIZED_IMG_HEIGHT = 224
 
