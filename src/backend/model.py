@@ -158,12 +158,12 @@ class DogBreedModel:
         file = tf.io.read_file(fileName)
         img = None
         if isWebp:
-            img = tf.io.decode_image(file, channels = 3)
-        else:
             img = tfio.image.decode_webp(file)
             img = tfio.experimental.color.rgba_to_rgb(
                 img
             )
+        else:
+            img = tf.io.decode_image(file, channels = 3)
         img = tf.image.convert_image_dtype(img, tf.float32)
         img = tf.image.resize_with_crop_or_pad(img, 224, 224)
         return img
