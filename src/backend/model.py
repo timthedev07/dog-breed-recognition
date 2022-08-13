@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import tensorflow as tf
+import tensorflow_io as tfio
 from tensorflow.python.keras.models import Sequential as SequentialType
 if __name__ == "__main__":
     from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout, BatchNormalization
@@ -148,14 +149,21 @@ class DogBreedModel:
         self.trainX, self.testX, self.trainY, self.testY = train_test_split(imgFilenames, allY, test_size=(1 - (self.trainPercentage / 100)), shuffle=False)
         print(tc.colored("Dataset & labels loaded.", "green"))
 
-    def imgToNp(self, fileName: tf.Tensor):
+    def imgToNp(self, fileName: tf.Tensor, isWebp = False):
         """
         Reads a given image, resize it, normalize it, and converts it to a tf tensor
 
         The `fileName` param should be a string tensor
         """
         file = tf.io.read_file(fileName)
-        img = tf.io.decode_image(file, channels = 3)
+        img = None
+        if isWebp:
+            img = tf.io.decode_image(file, channels = 3)
+        else:
+            img = tfio.image.decode_webp(file)
+            img = tfio.experimental.color.rgba_to_rgb(
+                img
+            )
         img = tf.image.convert_image_dtype(img, tf.float32)
         img = tf.image.resize_with_crop_or_pad(img, 224, 224)
         return img
