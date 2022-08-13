@@ -42,7 +42,7 @@ class DogBreedModel:
         self.testY = []
 
         # storing the classifier
-        self.classifier: SequentialType = Sequential([])
+        self.classifier: SequentialType = SequentialType([])
 
         self.populateLabels(breedTxtFilePath)
 
