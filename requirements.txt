@@ -50,7 +50,6 @@ tensorflow-estimator==2.9.0
 tensorflow-io-gcs-filesystem==0.26.0
 termcolor==1.1.0
 threadpoolctl==3.1.0
-timthedev07-dog-breed-recognition-model==1.0
 tqdm==4.64.0
 typing-extensions==4.3.0
 urllib3==1.26.11
